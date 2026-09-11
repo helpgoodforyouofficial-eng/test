@@ -1,9 +1,13 @@
 // ============================================
-// 📥 BILLS HISTORY MULTI-FORMAT DOWNLOAD ACTIONS
+// 📥 BILLS HISTORY MULTI-FORMAT DOWNLOAD ACTIONS — v2
+// ============================================
+// ✅ PDF: Clean clone (no buttons) + compact font + auto pages
+// ✅ CSV: Time column added
+// ✅ TXT: Clean table format (like ledger screenshot)
 // ============================================
 
 /**
- * 1. مین فنکشن: ڈاؤن لوڈ آپشنز والا پاپ اپ کھولنا
+ * 1. مین فنکشن: ڈاؤن لوڈ آپشنز والا پاپ اپ
  */
 function downloadHistoryPDF() {
     openDownloadOptionsModal();
@@ -11,10 +15,15 @@ function downloadHistoryPDF() {
 
 function openDownloadOptionsModal() {
     if (typeof savedBillsLog === 'undefined' || savedBillsLog.length === 0) {
+        const isUrdu = (typeof currentLang !== 'undefined' && currentLang === 'rtl');
         if (typeof Swal !== 'undefined') {
-            Swal.fire('خالی ہسٹری', 'ڈاؤن لوڈ کرنے کے لیے کوئی بل موجود نہیں ہے۔', 'info');
+            Swal.fire(
+                isUrdu ? 'خالی ہسٹری' : 'Empty History',
+                isUrdu ? 'ڈاؤن لوڈ کرنے کے لیے کوئی بل موجود نہیں ہے۔' : 'No bills available to download.',
+                'info'
+            );
         } else {
-            alert("ڈاؤن لوڈ کرنے کے لیے کوئی ہسٹری موجود نہیں ہے۔");
+            alert("No history available to download.");
         }
         return;
     }
@@ -46,12 +55,10 @@ function openDownloadOptionsModal() {
                 Swal.close();
                 generateHistoryPDFCanvas();
             });
-
             document.getElementById('dl-csv-btn').addEventListener('click', () => {
                 Swal.close();
                 generateHistoryCSV();
             });
-
             document.getElementById('dl-txt-btn').addEventListener('click', () => {
                 Swal.close();
                 generateHistoryTXT();
@@ -61,44 +68,96 @@ function openDownloadOptionsModal() {
 }
 
 /**
- * 📄 Option 1: PDF Generator (اردو کے بہترین رینڈر کے لیے html2canvas کا استعمال)
+ * 📄 Option 1: PDF Generator
+ * ✅ CLEAN CLONE: buttons waghera PDF mein nahi aayenge
+ * ✅ COMPACT: chota font = zyada data per page
+ * ✅ AUTO PAGES: data jitna bara, utni pages (khud)
  */
-const targetEl = document.querySelector('.record-panel');
+function generateHistoryPDFCanvas() {
+    const originalPanel = document.querySelector('.record-panel');
 
-    if (!targetEl) {
-        // اگر ہسٹری والا کنٹینر الگ سے نہ ملے تو پرنٹ فنکشن چلائے
+    if (!originalPanel) {
         window.print();
         return;
     }
 
+    // Loading popup
     if (typeof Swal !== 'undefined') {
         Swal.fire({
-            title: 'پی ڈی ایف بن رہی ہے...',
+            title: 'PDF بن رہی ہے...',
             text: 'برائے مہربانی انتظار کریں',
             allowOutsideClick: false,
             didOpen: () => { Swal.showLoading(); }
         });
     }
 
-    html2canvas(targetEl, { scale: 2, useCORS: true }).then(canvas => {
+    // 🧹 CLEAN CLONE — sirf data, koi button nahi!
+    const clone = originalPanel.cloneNode(true);
+
+    // 1. Saare buttons hatao (Edit/Delete/Download/Clear — kuch nahi chahiye)
+    clone.querySelectorAll('button').forEach(btn => btn.remove());
+
+    // 2. Action/Selection columns bhi hatao (agar khuli hon)
+    clone.querySelectorAll('.action-col-cell, .select-col-cell').forEach(td => td.remove());
+    clone.querySelectorAll('.action-col-header, .select-col-header').forEach(th => th.remove());
+
+    // 3. COMPACT STYLING — max data per page (chota par readable)
+    clone.style.cssText = `
+        position: absolute; left: -10000px; top: 0;
+        width: 780px; background: #ffffff; padding: 12px;
+        box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif;
+    `;
+    clone.querySelectorAll('h3').forEach(h => {
+        h.style.fontSize = '14px';
+        h.style.margin = '0 0 8px 0';
+    });
+
+    const recTable = clone.querySelector('.record-table');
+    if (recTable) {
+        recTable.style.fontSize = '10px';      // 🆕 chota font — zyada rows/page
+        recTable.style.width = '100%';
+        recTable.querySelectorAll('th').forEach(th => {
+            th.style.padding = '3px 4px';
+            th.style.fontSize = '9px';
+        });
+        recTable.querySelectorAll('td').forEach(td => {
+            td.style.padding = '2px 4px';       // 🆕 tight rows
+        });
+        recTable.querySelectorAll('.prod-tag').forEach(tag => {
+            tag.style.fontSize = '8px';         // 🆕 item names chote par readable
+            tag.style.padding = '1px 3px';
+            tag.style.margin = '1px';
+        });
+    }
+
+    // Off-screen attach → capture → remove
+    document.body.appendChild(clone);
+
+    html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }).then(canvas => {
+        document.body.removeChild(clone); // clone saaf
+
         const { jsPDF } = window.jspdf;
-        const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
-        
-        const imgWidth = 210; 
-        const pageHeight = 295;  
+
+        const imgWidth = 210;                 // A4 width
+        const pageHeight = 297;               // A4 height
+        const usableHeight = 285;             // thora margin
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const imgData = canvas.toDataURL('image/png');
+
         let heightLeft = imgHeight;
         let position = 0;
 
+        // Page 1
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        heightLeft -= usableHeight;
 
+        // 🆕 AUTO PAGES — jitna data, utni pages (har page next slice)
         while (heightLeft >= 0) {
-            position = heightLeft - imgHeight;
+            position = position - usableHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
+            heightLeft -= usableHeight;
         }
 
         const today = new Date().toISOString().slice(0, 10);
@@ -106,16 +165,24 @@ const targetEl = document.querySelector('.record-panel');
 
         if (typeof Swal !== 'undefined') Swal.close();
     }).catch(err => {
+        // clone saaf karna na bhoolen
+        if (document.body.contains(clone)) document.body.removeChild(clone);
         if (typeof Swal !== 'undefined') Swal.close();
-        alert("PDF جنریٹ کرنے میں مسئلہ آیا ہے، کمپیوٹر سے پرنٹ آپشن استعمال کریں۔");
+
+        const isUrdu = (typeof currentLang !== 'undefined' && currentLang === 'rtl');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('Error', isUrdu ? 'PDF بننے میں مسئلہ آیا۔' : 'Failed to generate PDF.', 'error');
+        } else {
+            alert("PDF generation failed.");
+        }
     });
 }
 
 /**
- * 📊 Option 2: Excel / CSV Generator (UTF-8 Urdu Supported)
+ * 📊 Option 2: Excel / CSV Generator (UTF-8 Urdu + Time column)
  */
 function generateHistoryCSV() {
-    let csvContent = "\uFEFFBill No,Customer,Date,Products Details,Grand Total,Received,Balance\n";
+    let csvContent = "\uFEFFBill No,Customer,Date,Time,Products Details,Grand Total,Received,Balance\n";
 
     savedBillsLog.forEach(b => {
         const prodList = (b.products && Array.isArray(b.products)) ? `"${b.products.join(' | ').replace(/"/g, '""')}"` : '""';
@@ -123,35 +190,53 @@ function generateHistoryCSV() {
         const total = `"${(b.totalAmount || '0.00').replace(/"/g, '""')}"`;
         const paid = `"${(b.paidAmount || '0.00').replace(/"/g, '""')}"`;
         const bal = `"${(b.balanceAmount || '0.00').replace(/"/g, '""')}"`;
+        const time = `"${(b.timeVal || '').replace(/"/g, '""')}"`;
 
-        csvContent += `${b.billNo},${custName},${b.dateVal || ''},${prodList},${total},${paid},${bal}\n`;
+        csvContent += `${b.billNo},${custName},${b.dateVal || ''},${time},${prodList},${total},${paid},${bal}\n`;
     });
 
     triggerFileDownload(csvContent, 'text/csv;charset=utf-8;', 'csv');
 }
 
 /**
- * 📝 Option 3: Text (.txt) Generator (UTF-8 BOM Supported for Urdu)
+ * 📝 Option 3: Text Generator (Clean Table Format — ledger jaisa)
  */
 function generateHistoryTXT() {
-    // \uFEFF اردو الفاظ کو درست ڈسپلے کرنے کے لیے ضروری ہے
-    let txtContent = "\uFEFF=========================================================\n";
-    txtContent += "                 SAVED BILLS HISTORY / LEDGER            \n";
-    txtContent += "=========================================================\n\n";
+    // \uFEFF Urdu ke liye zaroori
+    let txt = "\uFEFF";
+    txt += "==========================================================================================================\n";
+    txt += "                                    SAVED BILLS HISTORY / LEDGER                                          \n";
+    txt += "==========================================================================================================\n\n";
+
+    // 📋 TABLE HEADER (aligned columns)
+    txt += "Bill No | Customer          | Date       | Time  | Grand Total    | Received        | Balance         \n";
+    txt += "----------------------------------------------------------------------------------------------------------\n";
 
     savedBillsLog.forEach((b, index) => {
-        const prodList = (b.products && Array.isArray(b.products)) ? b.products.join('\n    - ') : 'N/A';
-        txtContent += `[${index + 1}] Bill No: ${b.billNo}\n`;
-        txtContent += `    Customer : ${b.customer || 'Counter Sale'}\n`;
-        txtContent += `    Date     : ${b.dateVal || 'N/A'} ${b.timeVal || ''}\n`;
-        txtContent += `    Items    :\n    - ${prodList}\n`;
-        txtContent += `    Total    : ${b.totalAmount || '0.00'}\n`;
-        txtContent += `    Received : ${b.paidAmount || '0.00'}\n`;
-        txtContent += `    Balance  : ${b.balanceAmount || '0.00'}\n`;
-        txtContent += "---------------------------------------------------------\n";
+        const billNo = String(b.billNo || '').padEnd(7, ' ');
+        const customer = String(b.customer || 'Counter Sale').substring(0, 17).padEnd(17, ' ');
+        const date = String(b.dateVal || 'N/A').padEnd(10, ' ');
+        const time = String(b.timeVal || '--:--').padEnd(5, ' ');
+        const total = String(b.totalAmount || '0.00').padEnd(14, ' ');
+        const paid = String(b.paidAmount || '0.00').padEnd(15, ' ');
+        const bal = String(b.balanceAmount || '0.00');
+
+        txt += `${billNo} | ${customer} | ${date} | ${time} | ${total} | ${paid} | ${bal}\n`;
+
+        // Items — neeche indented (har bill ke)
+        if (b.products && Array.isArray(b.products) && b.products.length > 0) {
+            txt += `        Items: ${b.products.join(', ')}\n`;
+        } else {
+            txt += `        Items: N/A\n`;
+        }
+        txt += "----------------------------------------------------------------------------------------------------------\n";
     });
 
-    triggerFileDownload(txtContent, 'text/plain;charset=utf-8;', 'txt');
+    txt += "\n";
+    txt += `Total Bills: ${savedBillsLog.length}\n`;
+    txt += `Generated: ${new Date().toLocaleString()}\n`;
+
+    triggerFileDownload(txt, 'text/plain;charset=utf-8;', 'txt');
 }
 
 /**
