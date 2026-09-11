@@ -1,6 +1,6 @@
 {
   "name": "Ultimate Universal Bill Generator",
-  "short_name": "BillGen",
+  "short_name": "Test BillGen",
   "description": "Generate dynamic professional invoice bills easily.",
   "start_url": "index.html",
   "display": "standalone",
